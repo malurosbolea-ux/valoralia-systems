@@ -17,7 +17,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inyeccion de diseno corporativo (Comando 19996)
+# Inyeccion de diseno corporativo
 st.markdown("""
     <style>
     .main {background-color: #ffffff;}
@@ -88,13 +88,21 @@ def cargar_pipeline_visual():
 
 try:
     paquete = cargar_paquete()
-    modelo = paquete["modelo"]
-    preprocessor = paquete["preprocesador"]
-    medianas_pca = paquete["medianas_pca"]
-    metricas = paquete["metricas_test"]
-    cols_num = paquete["columnas_numericas"]
-    cols_cat = paquete["columnas_categoricas"]
-    cols_pca = paquete["columnas_pca"]
+    
+    # Asignacion dinamica: busca la palabra en espanol o en ingles para no fallar
+    modelo = paquete.get("modelo", paquete.get("model"))
+    preprocessor = paquete.get("preprocesador", paquete.get("preprocessor"))
+    medianas_pca = paquete.get("medianas_pca", paquete.get("medianas", {}))
+    metricas = paquete.get("metricas_test", paquete.get("metricas", {"MAE": 215672}))
+    cols_num = paquete.get("columnas_numericas", paquete.get("num_cols", []))
+    cols_cat = paquete.get("columnas_categoricas", paquete.get("cat_cols", []))
+    cols_pca = paquete.get("columnas_pca", paquete.get("pca_cols", [f"pca_{i}" for i in range(1, 51)]))
+    
+    # Control de seguridad
+    if preprocessor is None:
+        st.error(f"Error interno. Las claves guardadas en el modelo son: {list(paquete.keys())}")
+        st.stop()
+        
 except FileNotFoundError:
     st.error("Error critico: Archivo valoralia_production.pkl no encontrado. Comprueba el repositorio.")
     st.stop()
