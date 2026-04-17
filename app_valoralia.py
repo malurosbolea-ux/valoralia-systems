@@ -11,46 +11,102 @@ import joblib
 from pathlib import Path
 from PIL import Image
 
-# Configuracion de pagina
+# Configuracion de pagina (Cero emojis por regla de proyecto)
 st.set_page_config(
-    page_title="Valoralia Systems | Tasacion Hibrida",
+    page_title="Valoralia Systems",
     layout="wide"
 )
 
-# Inyeccion de diseno corporativo
+# Inyeccion de CSS avanzado para diseno corporativo de alto impacto
 st.markdown("""
     <style>
-    .main {background-color: #ffffff;}
-    h1 {color: #0f172a; font-weight: 800; border-bottom: 2px solid #0f172a; padding-bottom: 10px;}
-    h2, h3 {color: #4b5563;}
+    /* Fondo principal y textos base */
+    .stApp {
+        background-color: #f8f9fa;
+        color: #000000;
+    }
+    
+    /* Titulos principales */
+    h1 {
+        color: #0f172a; 
+        font-weight: 900; 
+        font-size: 2.5rem;
+        letter-spacing: -1px;
+    }
+    h2, h3 {
+        color: #0f172a;
+        font-weight: 700;
+    }
+    
+    /* Subtitulos descriptivos */
+    .subtitle-text {
+        color: #4b5563;
+        font-size: 1.2rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid #b91c1c;
+        padding-bottom: 10px;
+    }
+
+    /* Tarjetas (Cards) para organizar la interfaz */
+    .css-card {
+        background-color: #ffffff;
+        border-radius: 8px;
+        padding: 25px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        margin-bottom: 20px;
+        border-top: 4px solid #0f172a;
+    }
+
+    /* Tarjeta de resultados (Impacto visual rojo) */
+    .result-card {
+        background-color: #ffffff;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        border-top: 6px solid #b91c1c;
+        margin-top: 30px;
+    }
+
+    /* Estilo del boton principal */
     .stButton>button {
         background-color: #0f172a;
         color: #ffffff;
-        border-radius: 4px;
+        border-radius: 6px;
         border: none;
-        padding: 0.6rem 2rem;
+        padding: 0.75rem 2.5rem;
+        font-size: 1.1rem;
         font-weight: bold;
         width: 100%;
         transition: all 0.3s ease;
+        box-shadow: 0 4px 6px rgba(15, 23, 42, 0.2);
     }
     .stButton>button:hover {
         background-color: #b91c1c;
         color: #ffffff;
+        box-shadow: 0 6px 8px rgba(185, 28, 28, 0.3);
+        transform: translateY(-2px);
     }
+
+    /* Metricas de resultado */
     div[data-testid="stMetricValue"] {
         color: #b91c1c;
-        font-weight: 800;
+        font-weight: 900;
+        font-size: 2.2rem;
     }
-    .stAlert {background-color: #f8f9fa; border-left-color: #0f172a;}
+    div[data-testid="stMetricLabel"] {
+        color: #4b5563;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# Cabecera
-st.title("Valoralia Systems")
-st.markdown("**Motor de tasacion inmobiliaria impulsado por Inteligencia Artificial Visual**")
-st.markdown("---")
+# Encabezado corporativo
+st.markdown("<h1>Valoralia Systems</h1>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle-text'>Motor de tasacion inmobiliaria impulsado por Inteligencia Artificial Visual</div>", unsafe_allow_html=True)
 
-# Carga de artefactos
+# Carga de artefactos asegurada (Solucion al KeyError)
 @st.cache_resource
 def cargar_paquete():
     ruta = Path(__file__).parent / "valoralia_production.pkl"
@@ -83,13 +139,11 @@ def cargar_pipeline_visual():
         ])
         return pca, modelo_extractor, transformacion
     except Exception as e:
-        st.warning(f"Aviso interno: Pipeline visual en modo fallback. Motivo: {e}")
         return None
 
 try:
     paquete = cargar_paquete()
-    
-    # Asignacion dinamica: busca la palabra en espanol o en ingles para no fallar
+    # Blindaje contra el diccionario en ingles/espanol
     modelo = paquete.get("modelo", paquete.get("model"))
     preprocessor = paquete.get("preprocesador", paquete.get("preprocessor"))
     medianas_pca = paquete.get("medianas_pca", paquete.get("medianas", {}))
@@ -98,20 +152,20 @@ try:
     cols_cat = paquete.get("columnas_categoricas", paquete.get("cat_cols", []))
     cols_pca = paquete.get("columnas_pca", paquete.get("pca_cols", [f"pca_{i}" for i in range(1, 51)]))
     
-    # Control de seguridad
     if preprocessor is None:
-        st.error(f"Error interno. Las claves guardadas en el modelo son: {list(paquete.keys())}")
+        st.error("Error critico: No se ha encontrado el preprocesador en el paquete.")
         st.stop()
         
 except FileNotFoundError:
-    st.error("Error critico: Archivo valoralia_production.pkl no encontrado. Comprueba el repositorio.")
+    st.error("Archivo valoralia_production.pkl no encontrado. Deteniendo ejecucion.")
     st.stop()
 
-# Estructura a dos columnas
+# Layout de la aplicacion en dos columnas
 col_izq, col_der = st.columns([1, 1], gap="large")
 
 with col_izq:
-    st.subheader("1. Caracteristicas Estructurales")
+    st.markdown("<div class='css-card'>", unsafe_allow_html=True)
+    st.markdown("<h3>Parametros Estructurales</h3>", unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
     superficie = c1.number_input("Superficie (m2)", min_value=15.0, value=90.0, step=5.0)
@@ -121,7 +175,8 @@ with col_izq:
     banos = c3.number_input("Banos", min_value=0.0, value=2.0, step=1.0)
     planta = c4.number_input("Planta (-1 sotano, 0 bajo)", min_value=-1.0, value=2.0, step=1.0)
 
-    st.markdown("##### Equipamiento")
+    st.markdown("<hr style='margin: 15px 0; border-color: #e5e7eb;'>", unsafe_allow_html=True)
+    
     c5, c6 = st.columns(2)
     ascensor = c5.selectbox("Ascensor", options=[1, 0], format_func=lambda x: "Si" if x==1 else "No")
     terraza = c6.selectbox("Terraza", options=[1, 0], format_func=lambda x: "Si" if x==1 else "No")
@@ -131,19 +186,25 @@ with col_izq:
     estado_reforma = c8.selectbox("Estado Reforma", options=[1, 0], format_func=lambda x: "Reformado" if x==1 else "A reformar")
     
     zona = st.selectbox("Zona Geografica", options=["Madrid Capital", "Pozuelo de Alarcon", "Majadahonda", "Las Rozas"])
+    st.markdown("</div>", unsafe_allow_html=True)
 
 with col_der:
-    st.subheader("2. Calidad Visual")
-    st.info("Sube fotografias del interior para que la IA realice el ajuste fino de la tasacion basandose en los acabados y el estado de conservacion.")
-    imagenes = st.file_uploader("Adjuntar imagenes (Opcional)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
+    st.markdown("<div class='css-card'>", unsafe_allow_html=True)
+    st.markdown("<h3>Auditoria Visual (IA)</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #4b5563;'>Adjunte fotografias del interior para calibrar la calidad estetica de los acabados.</p>", unsafe_allow_html=True)
+    
+    imagenes = st.file_uploader("", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
     
     if imagenes:
-        st.success(f"{len(imagenes)} fotografia(s) cargada(s) correctamente.")
-    
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    boton_calcular = st.button("EJECUTAR TASACION HIBRIDA")
+        st.success(f"{len(imagenes)} documentos visuales en memoria.")
+    else:
+        st.info("Modo tasacion basica. Se aplicara imputacion por mediana del mercado.")
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+    boton_calcular = st.button("PROCESAR TASACION")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# Logica de ejecucion
+# Motor predictivo
 if boton_calcular:
     datos = {
         'superficie_m2': superficie,
@@ -161,13 +222,14 @@ if boton_calcular:
     pipeline = cargar_pipeline_visual()
     usa_fotos = False
 
+    # Integracion de caracteristicas visuales o Fallback
     if imagenes and pipeline is not None:
         usa_fotos = True
         pca, modelo_extractor, transformacion = pipeline
         import torch
         
         vectores = []
-        with st.spinner("Procesando vectores visuales con ResNet50..."):
+        with st.spinner("Analizando pixeles mediante ResNet50..."):
             with torch.no_grad():
                 for img_file in imagenes:
                     img = Image.open(img_file).convert('RGB')
@@ -181,11 +243,11 @@ if boton_calcular:
             for i, col in enumerate(cols_pca):
                 datos[col] = pca_feats[i]
     else:
-        # Fallback de seguridad exigido por el tribunal
+        # Aplicacion estricta de la regla de Miguel: no inventar datos. Se usan medianas.
         for col in cols_pca:
             datos[col] = medianas_pca.get(col, 0.0)
 
-    # Prediccion
+    # Transformacion predictiva
     df_input = pd.DataFrame([datos])[cols_num + cols_cat + cols_pca]
     X_transformed = preprocessor.transform(df_input)
     pred_log = modelo.predict(X_transformed)[0]
@@ -195,14 +257,16 @@ if boton_calcular:
     precio_bajo = max(0, precio_estimado - mae)
     precio_alto = precio_estimado + mae
 
-    # Resultados visuales
-    st.markdown("---")
-    st.subheader("3. Informe de Tasacion")
+    # Renderizado de resultados
+    st.markdown("<div class='result-card'>", unsafe_allow_html=True)
+    st.markdown("<h2>Dictamen de Valoracion</h2>", unsafe_allow_html=True)
     
     if not usa_fotos:
-        st.warning("Tasacion realizada en modo ciego. Se ha inyectado la mediana visual del mercado al no detectar fotografias validas.")
+        st.markdown("<p style='color: #b91c1c; font-weight: bold;'>Aviso: Tasacion ejecutada con perfiles visuales neutros (Mediana).</p>", unsafe_allow_html=True)
     
     c_res1, c_res2, c_res3 = st.columns(3)
     c_res1.metric("Escenario Conservador", f"{precio_bajo:,.0f} €".replace(",", "."))
     c_res2.metric("Valor Optimo de Mercado", f"{precio_estimado:,.0f} €".replace(",", "."))
     c_res3.metric("Escenario Alcista", f"{precio_alto:,.0f} €".replace(",", "."))
+    
+    st.markdown("</div>", unsafe_allow_html=True)
