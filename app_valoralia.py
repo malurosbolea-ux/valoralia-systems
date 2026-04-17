@@ -2,10 +2,6 @@
 Valoralia Systems - Aplicacion de valoracion inmobiliaria hibrida
 Autora: Maria Luisa Ros Bolea
 TFM Master IA y Big Data - CEU San Pablo 2025-2026
-
-Esta aplicacion permite tasar viviendas en Madrid combinando datos
-tabulares con analisis visual de fotografias del interior mediante
-la arquitectura ResNet50 y reduccion de dimensionalidad PCA.
 """
 
 import streamlit as st
@@ -15,28 +11,53 @@ import joblib
 from pathlib import Path
 from PIL import Image
 
-# --- Configuracion de pagina ---
+# Configuracion de pagina
 st.set_page_config(
-    page_title="Valoralia Systems",
-    page_icon="",
-    layout="centered"
+    page_title="Valoralia Systems | Tasacion Hibrida",
+    layout="wide"
 )
 
-# --- Paleta Comando 19996 ---
-AZUL_MARINO = "#0f172a"
-GRIS_OSCURO = "#4b5563"
+# Inyeccion de diseno corporativo (Comando 19996)
+st.markdown("""
+    <style>
+    .main {background-color: #ffffff;}
+    h1 {color: #0f172a; font-weight: 800; border-bottom: 2px solid #0f172a; padding-bottom: 10px;}
+    h2, h3 {color: #4b5563;}
+    .stButton>button {
+        background-color: #0f172a;
+        color: #ffffff;
+        border-radius: 4px;
+        border: none;
+        padding: 0.6rem 2rem;
+        font-weight: bold;
+        width: 100%;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        background-color: #b91c1c;
+        color: #ffffff;
+    }
+    div[data-testid="stMetricValue"] {
+        color: #b91c1c;
+        font-weight: 800;
+    }
+    .stAlert {background-color: #f8f9fa; border-left-color: #0f172a;}
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- Carga del paquete de produccion ---
+# Cabecera
+st.title("Valoralia Systems")
+st.markdown("**Motor de tasacion inmobiliaria impulsado por Inteligencia Artificial Visual**")
+st.markdown("---")
+
+# Carga de artefactos
 @st.cache_resource
 def cargar_paquete():
-    """Carga el paquete de produccion con modelo, preprocesador y medianas."""
     ruta = Path(__file__).parent / "valoralia_production.pkl"
     return joblib.load(ruta)
 
 @st.cache_resource
 def cargar_pipeline_visual():
-    """Carga el transformador PCA y el modelo ResNet50 para procesar fotos.
-    Si no estan disponibles, devuelve None y la app usa medianas como fallback."""
     try:
         import torch
         import torchvision.models as models
@@ -48,242 +69,132 @@ def cargar_pipeline_visual():
             return None
 
         pca = joblib.load(ruta_pca)
-
         pesos = ResNet50_Weights.DEFAULT
-        modelo_resnet = models.resnet50(weights=pesos)
-        extractor = torch.nn.Sequential(*(list(modelo_resnet.children())[:-1]))
-        extractor.eval()
+        modelo_rn = models.resnet50(weights=pesos)
+        
+        modelo_extractor = torch.nn.Sequential(*(list(modelo_rn.children())[:-1]))
+        modelo_extractor.eval()
 
         transformacion = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
-
-        return {
-            "pca": pca,
-            "extractor": extractor,
-            "transformacion": transformacion,
-            "torch": torch
-        }
-    except ImportError:
-        return None
-    except Exception:
+        return pca, modelo_extractor, transformacion
+    except Exception as e:
+        st.warning(f"Aviso interno: Pipeline visual en modo fallback. Motivo: {e}")
         return None
 
+try:
+    paquete = cargar_paquete()
+    modelo = paquete["modelo"]
+    preprocessor = paquete["preprocesador"]
+    medianas_pca = paquete["medianas_pca"]
+    metricas = paquete["metricas_test"]
+    cols_num = paquete["columnas_numericas"]
+    cols_cat = paquete["columnas_categoricas"]
+    cols_pca = paquete["columnas_pca"]
+except FileNotFoundError:
+    st.error("Error critico: Archivo valoralia_production.pkl no encontrado. Comprueba el repositorio.")
+    st.stop()
 
-def procesar_imagenes(imagenes_subidas, pipeline_visual):
-    """Procesa una o varias fotografias con ResNet50 y devuelve los 50 componentes PCA.
+# Estructura a dos columnas
+col_izq, col_der = st.columns([1, 1], gap="large")
 
-    Promedia los vectores de todas las fotos (regla multipantalla del tutor)
-    y aplica la transformacion PCA entrenada en NB03.
+with col_izq:
+    st.subheader("1. Caracteristicas Estructurales")
+    
+    c1, c2 = st.columns(2)
+    superficie = c1.number_input("Superficie (m2)", min_value=15.0, value=90.0, step=5.0)
+    habitaciones = c2.number_input("Habitaciones", min_value=0.0, value=3.0, step=1.0)
+    
+    c3, c4 = st.columns(2)
+    banos = c3.number_input("Banos", min_value=0.0, value=2.0, step=1.0)
+    planta = c4.number_input("Planta (-1 sotano, 0 bajo)", min_value=-1.0, value=2.0, step=1.0)
 
-    Parameters
-    ----------
-    imagenes_subidas : list
-        Lista de objetos UploadedFile de Streamlit.
-    pipeline_visual : dict
-        Diccionario con el extractor ResNet50, la transformacion y el PCA.
+    st.markdown("##### Equipamiento")
+    c5, c6 = st.columns(2)
+    ascensor = c5.selectbox("Ascensor", options=[1, 0], format_func=lambda x: "Si" if x==1 else "No")
+    terraza = c6.selectbox("Terraza", options=[1, 0], format_func=lambda x: "Si" if x==1 else "No")
+    
+    c7, c8 = st.columns(2)
+    garaje = c7.selectbox("Garaje", options=[1, 0], format_func=lambda x: "Si" if x==1 else "No")
+    estado_reforma = c8.selectbox("Estado Reforma", options=[1, 0], format_func=lambda x: "Reformado" if x==1 else "A reformar")
+    
+    zona = st.selectbox("Zona Geografica", options=["Madrid Capital", "Pozuelo de Alarcon", "Majadahonda", "Las Rozas"])
 
-    Returns
-    -------
-    dict
-        Diccionario con las 50 componentes PCA (pca_1 a pca_50).
-    """
-    extractor = pipeline_visual["extractor"]
-    transformacion = pipeline_visual["transformacion"]
-    pca = pipeline_visual["pca"]
-    torch = pipeline_visual["torch"]
+with col_der:
+    st.subheader("2. Calidad Visual")
+    st.info("Sube fotografias del interior para que la IA realice el ajuste fino de la tasacion basandose en los acabados y el estado de conservacion.")
+    imagenes = st.file_uploader("Adjuntar imagenes (Opcional)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
+    
+    if imagenes:
+        st.success(f"{len(imagenes)} fotografia(s) cargada(s) correctamente.")
+    
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    boton_calcular = st.button("EJECUTAR TASACION HIBRIDA")
 
-    vectores = []
-    for img_file in imagenes_subidas:
-        try:
-            imagen = Image.open(img_file).convert("RGB")
-            tensor = transformacion(imagen).unsqueeze(0)
-            with torch.no_grad():
-                vector = extractor(tensor).squeeze().numpy()
-            vectores.append(vector)
-        except Exception:
-            continue
-
-    if len(vectores) == 0:
-        return None
-
-    # Promedio de todos los vectores (regla multipantalla)
-    vector_medio = np.mean(vectores, axis=0).reshape(1, -1)
-
-    # Transformacion PCA (50 componentes)
-    componentes = pca.transform(vector_medio)[0]
-
-    return {f"pca_{i+1}": float(componentes[i]) for i in range(len(componentes))}
-
-
-# --- Carga de artefactos ---
-paquete = cargar_paquete()
-modelo = paquete["modelo"]
-preprocessor = paquete["preprocessor"]
-medianas_pca = paquete["medianas_pca"]
-cols_num = paquete["cols_num"]
-cols_cat = paquete["cols_cat"]
-cols_pca = paquete["cols_pca"]
-metricas = paquete["metricas_base"]
-
-pipeline_visual = cargar_pipeline_visual()
-vision_disponible = pipeline_visual is not None
-
-# --- Zonas y tipos ---
-ZONAS = ['Alcala_Henares', 'Alcobendas', 'Alcorcon', 'Arganda', 'Boadilla',
-         'Carabanchel', 'Centro', 'Chamartin', 'Chamberi', 'Ciudad_Lineal',
-         'Colmenar_Viejo', 'Coslada', 'Fuencarral', 'Fuenlabrada', 'Getafe',
-         'Las_Rozas', 'Latina', 'Leganes', 'Majadahonda', 'Moncloa',
-         'Moratalaz', 'Mostoles', 'Parla', 'Pinto', 'Pozuelo',
-         'Puente_Vallecas', 'Retiro', 'Rivas', 'SS_Reyes', 'Salamanca',
-         'San_Blas', 'Tetuan', 'Torrejon', 'Tres_Cantos', 'Usera',
-         'Vicalvaro', 'Villa_Vallecas', 'Villaverde', 'Villaviciosa_Odon']
-
-TIPOS = ['atico', 'chalet', 'duplex', 'estudio', 'piso']
-
-# --- Interfaz ---
-st.title("Valoralia Systems")
-st.markdown(
-    "Sistema de valoracion inmobiliaria hibrido: combina datos estructurales "
-    "con analisis visual de las fotografias del interior mediante inteligencia "
-    "artificial (ResNet50 + PCA)."
-)
-st.markdown("---")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    zona = st.selectbox("Zona de Madrid", ZONAS)
-    tipo = st.selectbox("Tipo de inmueble", TIPOS)
-    superficie = st.number_input("Superficie (m2)", min_value=10, max_value=1500, value=80)
-    habitaciones = st.number_input("Habitaciones", min_value=0, max_value=20, value=2)
-    banos = st.number_input("Banos", min_value=0, max_value=10, value=1)
-
-with col2:
-    planta = st.number_input("Planta", min_value=-2, max_value=50, value=1)
-    ascensor = st.selectbox("Ascensor", ["Desconocido", "Si", "No"])
-    terraza = st.selectbox("Terraza", ["Desconocido", "Si", "No"])
-    garaje = st.selectbox("Garaje", ["Desconocido", "Si", "No"])
-    calefaccion = st.selectbox("Calefaccion", ["Desconocido", "Si", "No"])
-    estado_reforma = st.selectbox("Reformado", ["Desconocido", "Si", "No"])
-
-
-def mapear_binario(valor):
-    """Convierte las opciones del desplegable a valores numericos."""
-    if valor == "Si":
-        return 1
-    elif valor == "No":
-        return 0
-    else:
-        return -1
-
-
-# --- Seccion de fotografias ---
-st.markdown("---")
-st.subheader("Fotografias del interior")
-
-if vision_disponible:
-    st.markdown(
-        "Sube una o varias fotografias del interior de la vivienda. "
-        "El sistema analizara la calidad visual (acabados, iluminacion, estado) "
-        "para ajustar la valoracion."
-    )
-    imagenes = st.file_uploader(
-        "Selecciona las fotografias del interior",
-        type=["jpg", "jpeg", "png"],
-        accept_multiple_files=True
-    )
-else:
-    imagenes = []
-    st.info(
-        "El modulo de vision artificial no esta disponible en esta instancia. "
-        "La valoracion se realizara usando el perfil visual medio del mercado "
-        "madrileno como referencia (medianas PCA del dataset de entrenamiento)."
-    )
-
-# --- Boton de prediccion ---
-st.markdown("---")
-if st.button("Calcular valoracion", type="primary"):
-
-    # Construyo el registro de entrada con las variables tabulares
+# Logica de ejecucion
+if boton_calcular:
     datos = {
-        "superficie_m2": float(superficie),
-        "habitaciones": float(habitaciones),
-        "banos": float(banos),
-        "planta": float(planta),
-        "num_imagenes": float(len(imagenes)) if imagenes else 0.0,
-        "codigo_postal": 0.0,
-        "ascensor": mapear_binario(ascensor),
-        "terraza": mapear_binario(terraza),
-        "garaje": mapear_binario(garaje),
-        "calefaccion": mapear_binario(calefaccion),
-        "estado_reforma": mapear_binario(estado_reforma),
-        "zona_scraping": zona,
-        "tipo_inmueble": tipo
+        'superficie_m2': superficie,
+        'habitaciones': habitaciones,
+        'banos': banos,
+        'planta': planta,
+        'ascensor': ascensor,
+        'estado_reforma': estado_reforma,
+        'terraza': terraza,
+        'garaje': garaje,
+        'zona_scraping': zona,
+        'tipo_inmueble': 'Piso'
     }
 
-    # Determino los valores PCA segun si hay fotos o no
+    pipeline = cargar_pipeline_visual()
     usa_fotos = False
-    if imagenes and vision_disponible:
-        with st.spinner("Analizando las fotografias con ResNet50..."):
-            pca_resultado = procesar_imagenes(imagenes, pipeline_visual)
 
-        if pca_resultado is not None:
-            usa_fotos = True
-            for col in cols_pca:
-                datos[col] = pca_resultado.get(col, medianas_pca.get(col, 0.0))
-        else:
-            st.warning(
-                "No se pudieron procesar las fotografias. "
-                "Se usara el perfil visual medio como referencia."
-            )
-            for col in cols_pca:
-                datos[col] = medianas_pca.get(col, 0.0)
+    if imagenes and pipeline is not None:
+        usa_fotos = True
+        pca, modelo_extractor, transformacion = pipeline
+        import torch
+        
+        vectores = []
+        with st.spinner("Procesando vectores visuales con ResNet50..."):
+            with torch.no_grad():
+                for img_file in imagenes:
+                    img = Image.open(img_file).convert('RGB')
+                    img_t = transformacion(img).unsqueeze(0)
+                    feat = modelo_extractor(img_t).flatten().numpy()
+                    vectores.append(feat)
+            
+            vector_medio = np.mean(vectores, axis=0).reshape(1, -1)
+            pca_feats = pca.transform(vector_medio)[0]
+            
+            for i, col in enumerate(cols_pca):
+                datos[col] = pca_feats[i]
     else:
-        # Fallback a medianas PCA (representan la vivienda tipica de Madrid)
+        # Fallback de seguridad exigido por el tribunal
         for col in cols_pca:
             datos[col] = medianas_pca.get(col, 0.0)
 
-    # Construyo el DataFrame y predigo
-    df_input = pd.DataFrame([datos])
-    df_input = df_input[cols_num + cols_cat + cols_pca]
-
+    # Prediccion
+    df_input = pd.DataFrame([datos])[cols_num + cols_cat + cols_pca]
     X_transformed = preprocessor.transform(df_input)
     pred_log = modelo.predict(X_transformed)[0]
     precio_estimado = float(np.expm1(pred_log))
 
-    mae = metricas["MAE"]
+    mae = metricas.get("MAE", 215672) 
     precio_bajo = max(0, precio_estimado - mae)
     precio_alto = precio_estimado + mae
 
-    # --- Resultado ---
+    # Resultados visuales
     st.markdown("---")
-    st.subheader("Resultado de la valoracion")
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Estimacion baja", f"{precio_bajo:,.0f} EUR")
-    c2.metric("Valoracion central", f"{precio_estimado:,.0f} EUR")
-    c3.metric("Estimacion alta", f"{precio_alto:,.0f} EUR")
-
-    fuente_visual = "fotografias reales del inmueble" if usa_fotos else "medianas PCA del mercado madrileno"
-    st.caption(
-        f"Intervalo basado en el MAE historico del modelo ({mae:,.0f} EUR). "
-        f"Fuente visual: {fuente_visual}."
-    )
-
-    # Muestro las fotos subidas como confirmacion
-    if imagenes and usa_fotos:
-        st.markdown("**Fotografias analizadas:**")
-        cols_fotos = st.columns(min(len(imagenes), 4))
-        for i, img in enumerate(imagenes[:4]):
-            with cols_fotos[i]:
-                st.image(img, use_container_width=True)
-
-st.markdown("---")
-st.caption("Valoralia Systems v1.0 | Maria Luisa Ros Bolea | TFM CEU San Pablo 2025-2026")
+    st.subheader("3. Informe de Tasacion")
+    
+    if not usa_fotos:
+        st.warning("Tasacion realizada en modo ciego. Se ha inyectado la mediana visual del mercado al no detectar fotografias validas.")
+    
+    c_res1, c_res2, c_res3 = st.columns(3)
+    c_res1.metric("Escenario Conservador", f"{precio_bajo:,.0f} €".replace(",", "."))
+    c_res2.metric("Valor Optimo de Mercado", f"{precio_estimado:,.0f} €".replace(",", "."))
+    c_res3.metric("Escenario Alcista", f"{precio_alto:,.0f} €".replace(",", "."))
