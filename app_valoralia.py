@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import joblib
 from pathlib import Path
+from PIL import Image
 
 st.set_page_config(page_title="Valoralia Systems", layout="wide")
 
@@ -43,6 +44,36 @@ def cargar_paquete():
     ruta = Path(__file__).parent / "valoralia_production.pkl"
     return joblib.load(ruta)
 
+@st.cache_resource
+def cargar_pipeline_visual():
+    """Carga ResNet50 + PCA para procesar fotos en tiempo real."""
+    try:
+        import torch
+        import torchvision.models as models
+        from torchvision.models import ResNet50_Weights
+        import torchvision.transforms as transforms
+
+        ruta_pca = Path(__file__).parent / "valoralia_pca_transformer.pkl"
+        if not ruta_pca.exists():
+            return None
+
+        pca = joblib.load(ruta_pca)
+        pesos = ResNet50_Weights.DEFAULT
+        modelo_rn = models.resnet50(weights=pesos)
+        extractor = torch.nn.Sequential(*(list(modelo_rn.children())[:-1]))
+        extractor.eval()
+
+        transformacion = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+        return {"pca": pca, "extractor": extractor, "transformacion": transformacion, "torch": torch}
+    except Exception:
+        return None
+
 paquete = cargar_paquete()
 modelo = paquete["modelo"]
 preprocessor = paquete["preprocessor"]
@@ -52,7 +83,10 @@ cols_cat = paquete["cols_cat"]
 cols_pca = paquete["cols_pca"]
 metricas = paquete["metricas_base"]
 
-# --- Las 39 zonas REALES del dataset de entrenamiento ---
+pipeline_visual = cargar_pipeline_visual()
+vision_disponible = pipeline_visual is not None
+
+# --- Las 39 zonas REALES del dataset ---
 ZONAS_DISPLAY = {
     'Alcala_Henares': 'Alcala de Henares', 'Alcobendas': 'Alcobendas',
     'Alcorcon': 'Alcorcon', 'Arganda': 'Arganda del Rey',
@@ -75,14 +109,37 @@ ZONAS_DISPLAY = {
 }
 ZONAS_KEYS = list(ZONAS_DISPLAY.keys())
 ZONAS_LABELS = list(ZONAS_DISPLAY.values())
-
-# Los 5 tipos REALES del dataset (en minuscula, tal como los entreno el modelo)
 TIPOS_KEYS = ['piso', 'atico', 'duplex', 'estudio', 'chalet']
 TIPOS_DISPLAY = ['Piso', 'Atico', 'Duplex', 'Estudio', 'Chalet']
 
 def mapear(v):
-    """1=Si, 0=No, -1=Desconocido (regla de Miguel: no inventar datos)."""
     return 1 if v == "Si" else (0 if v == "No" else -1)
+
+def procesar_imagenes(imagenes_subidas):
+    """Procesa fotos con ResNet50 y devuelve 50 componentes PCA."""
+    extractor = pipeline_visual["extractor"]
+    transformacion = pipeline_visual["transformacion"]
+    pca = pipeline_visual["pca"]
+    torch = pipeline_visual["torch"]
+
+    vectores = []
+    for img_file in imagenes_subidas:
+        try:
+            imagen = Image.open(img_file).convert("RGB")
+            tensor = transformacion(imagen).unsqueeze(0)
+            with torch.no_grad():
+                vector = extractor(tensor).squeeze().numpy()
+            vectores.append(vector)
+        except Exception:
+            continue
+
+    if len(vectores) == 0:
+        return None
+
+    # Promediado multipantalla (regla de Miguel: usar TODAS las fotos)
+    vector_medio = np.mean(vectores, axis=0).reshape(1, -1)
+    componentes = pca.transform(vector_medio)[0]
+    return {f"pca_{i+1}": float(componentes[i]) for i in range(len(componentes))}
 
 # --- Cabecera ---
 st.markdown("<h1>Valoralia Systems</h1>", unsafe_allow_html=True)
@@ -94,12 +151,10 @@ col_izq, col_der = st.columns(2, gap="large")
 
 with col_izq:
     st.subheader("Caracteristicas del inmueble")
-
     c1, c2 = st.columns(2)
     zona_idx = c1.selectbox("Zona de Madrid", range(len(ZONAS_LABELS)),
                             format_func=lambda i: ZONAS_LABELS[i], index=6)
     zona = ZONAS_KEYS[zona_idx]
-
     tipo_idx = c2.selectbox("Tipo de inmueble", range(len(TIPOS_DISPLAY)),
                             format_func=lambda i: TIPOS_DISPLAY[i], index=0)
     tipo = TIPOS_KEYS[tipo_idx]
@@ -114,43 +169,39 @@ with col_izq:
 
     st.write("---")
     st.markdown("**Equipamiento y estado**")
-
     c7, c8 = st.columns(2)
     ascensor = c7.selectbox("Ascensor", ["Desconocido", "Si", "No"])
     terraza = c8.selectbox("Terraza", ["Desconocido", "Si", "No"])
-
     c9, c10 = st.columns(2)
     garaje = c9.selectbox("Garaje", ["Desconocido", "Si", "No"])
     calefaccion = c10.selectbox("Calefaccion", ["Desconocido", "Si", "No"])
-
     estado_reforma = st.selectbox("Estado de reforma", ["Desconocido", "Si", "No"])
 
 with col_der:
     st.subheader("Analisis visual (IA)")
-    st.info(
-        "Sube fotografias del interior de la vivienda. La red neuronal ResNet50 "
-        "analizara la calidad visual para ajustar la tasacion. Si no se adjuntan "
-        "fotografias, se aplicara el perfil visual medio del mercado madrileno."
-    )
-
+    if vision_disponible:
+        st.info(
+            "Sube fotografias del interior. La red neuronal ResNet50 analizara "
+            "la calidad visual (acabados, iluminacion, estado) para ajustar la tasacion."
+        )
+    else:
+        st.warning(
+            "El modulo de vision artificial no esta disponible. "
+            "Se usara el perfil visual medio del mercado madrileno."
+        )
     imagenes = st.file_uploader("Fotografias del interior",
                                 type=['jpg', 'jpeg', 'png'],
                                 accept_multiple_files=True)
-
     if imagenes:
         st.success(f"{len(imagenes)} fotografias listas para analisis.")
     else:
-        st.warning(
-            "Modo tasacion basica: se aplicara la imputacion estadistica "
-            "(medianas PCA) del mercado madrileno como referencia visual."
-        )
+        st.warning("Sin fotografias: se aplicara la imputacion estadistica (medianas PCA).")
 
     st.write("")
     boton = st.button("CALCULAR VALORACION", type="primary")
 
 # --- Logica predictiva ---
 if boton:
-    # Construyo el registro con TODAS las 13 variables que espera el preprocesador
     datos = {
         "superficie_m2": float(superficie),
         "habitaciones": float(habitaciones),
@@ -167,9 +218,24 @@ if boton:
         "tipo_inmueble": tipo
     }
 
-    # Fallback a medianas PCA (la vivienda tipica de Madrid, NO ceros)
-    for col in cols_pca:
-        datos[col] = medianas_pca.get(col, 0.0)
+    # --- PROCESAMIENTO VISUAL: fotos -> ResNet50 -> PCA -> prediccion ---
+    usa_fotos = False
+    if imagenes and vision_disponible:
+        with st.spinner("Analizando fotografias con ResNet50..."):
+            pca_resultado = procesar_imagenes(imagenes)
+        if pca_resultado is not None:
+            usa_fotos = True
+            for col in cols_pca:
+                datos[col] = pca_resultado.get(col, medianas_pca.get(col, 0.0))
+            st.success("Fotografias procesadas correctamente con vision artificial.")
+        else:
+            st.warning("No se pudieron procesar. Se usan medianas PCA.")
+            for col in cols_pca:
+                datos[col] = medianas_pca.get(col, 0.0)
+    else:
+        # Fallback: medianas PCA (vivienda tipica de Madrid, NO ceros)
+        for col in cols_pca:
+            datos[col] = medianas_pca.get(col, 0.0)
 
     # Prediccion
     df_input = pd.DataFrame([datos])[cols_num + cols_cat + cols_pca]
@@ -184,18 +250,18 @@ if boton:
     # Resultado
     st.write("---")
     st.subheader("Resultado de la valoracion")
-
     c_r1, c_r2, c_r3 = st.columns(3)
     c_r1.metric("Estimacion conservadora", f"{precio_bajo:,.0f} EUR")
     c_r2.metric("Valoracion central", f"{precio_estimado:,.0f} EUR")
     c_r3.metric("Estimacion optimista", f"{precio_alto:,.0f} EUR")
 
+    fuente = "fotografias reales analizadas con ResNet50" if usa_fotos else "medianas PCA del mercado madrileno"
     st.markdown(f"""
     <div class="info-box">
         <strong>Metodologia:</strong> Modelo hibrido XGBoost entrenado con 7.970 inmuebles
         reales de Pisos.com (marzo 2026) y 103.438 fotografias procesadas con ResNet50.
-        El intervalo se basa en el error absoluto medio historico ({mae:,.0f} EUR).
-        Las componentes visuales utilizan el perfil medio del mercado madrileno.
+        El intervalo se basa en el MAE historico ({mae:,.0f} EUR).
+        Fuente visual: {fuente}.
         R2 logaritmico: 0,9146 · MAPE: 20,2%
     </div>
     """, unsafe_allow_html=True)
