@@ -1,7 +1,7 @@
 # Valoralia Systems. Dependencias de produccion
 # VERSIONES CRITICAS: coherentes con el preprocesador.pkl serializado en el NB05
 # scikit-learn 1.6.1 es OBLIGATORIO para evitar el error __sklearn_tags__
-streamlit==1.32.0
+streamlit>=1.33.0
 pandas==2.2.0
 numpy==1.26.4
 scikit-learn==1.6.1
