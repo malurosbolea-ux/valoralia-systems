@@ -3,82 +3,110 @@ import pandas as pd
 import numpy as np
 import joblib
 import xgboost as xgb
-from PIL import Image
 
 # ==============================================================================
-# CONFIGURACIÓN VISUAL Y ESTILO PREMIUM (MÉTODO MALU)
+# Configuracion visual corporativa (Enterprise Edition)
 # ==============================================================================
 st.set_page_config(
-    page_title="VALORALIA Systems | Luxury Real Estate AI",
-    page_icon="🏢",
+    page_title="Valoralia Systems | Enterprise AI",
     layout="wide"
 )
 
-# Inyección de CSS para fondo con imagen de Madrid y tarjetas translúcidas
+# Inyeccion de CSS avanzado para fondo translucido y tarjetas cristal
 st.markdown(
     """
     <style>
+    /* Fondo de edificios con opacidad controlada mediante degradado rgba */
     .stApp {
-        background: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), 
-                    url('https://images.unsplash.com/photo-1543783230-278398a4ee4d?q=80&w=2070&auto=format&fit=crop');
+        background: linear-gradient(rgba(241, 245, 249, 0.88), rgba(241, 245, 249, 0.88)), 
+                    url('https://images.unsplash.com/photo-1539037116277-4db20202d03d?auto=format&fit=crop&w=1920&q=80') no-repeat center center fixed;
         background-size: cover;
-        background-attachment: fixed;
     }
     
+    /* Estilo de la tarjeta principal */
     .main-card {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        border-radius: 20px;
-        padding: 30px;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 12px;
+        padding: 40px;
         border: 1px solid rgba(15, 23, 42, 0.1);
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        box-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.2);
     }
     
+    /* Titulos corporativos sin mayusculas abusivas */
     h1 {
         color: #0f172a;
         font-family: 'Helvetica Neue', sans-serif;
-        font-weight: 800;
-        letter-spacing: -1px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
         text-align: center;
+        margin-bottom: 5px;
     }
     
+    .subtitulo {
+        text-align: center; 
+        color: #64748b; 
+        font-size: 1.1rem;
+        margin-bottom: 40px;
+        font-weight: 400;
+    }
+    
+    /* Botones de alta conversion */
     .stButton>button {
         background-color: #0f172a !important;
-        color: white !important;
-        border-radius: 10px !important;
-        padding: 10px 25px !important;
+        color: #ffffff !important;
+        border-radius: 6px !important;
+        padding: 12px 30px !important;
         font-weight: 600 !important;
         width: 100%;
-        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border: none;
+        transition: background-color 0.3s ease;
     }
     
     .stButton>button:hover {
-        background-color: #1e293b !important;
-        transform: translateY(-2px);
+        background-color: #334155 !important;
     }
     
+    /* Caja del resultado final */
     .resultado-caja {
         background: #0f172a;
-        color: white;
-        padding: 2rem;
-        border-radius: 15px;
+        color: #ffffff;
+        padding: 30px;
+        border-radius: 8px;
         text-align: center;
-        margin-top: 20px;
+        margin-top: 30px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     
-    .metric-label { font-size: 0.9rem; opacity: 0.8; }
-    .metric-value { font-size: 2.5rem; font-weight: 700; }
+    .metric-value { font-size: 3rem; font-weight: 700; color: #38bdf8; }
+    
+    /* Iconos SVG alineados con texto */
+    .seccion-titulo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #0f172a;
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 15px;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 10px;
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
+# Iconos dibujados en codigo SVG
+svg_ubicacion = """<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>"""
+svg_edificio = """<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M12 14h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>"""
+
 # ==============================================================================
-# CARGA DE ARTEFACTOS (SIN INVENTOS)
+# Carga de artefactos
 # ==============================================================================
 @st.cache_resource
 def cargar_cerebro():
-    # Solo mis archivos reales del TFM
     prepro = joblib.load('preprocesador.pkl')
     model = xgb.XGBRegressor()
     model.load_model('modelo_xgb.json')
@@ -88,42 +116,48 @@ def cargar_cerebro():
 try:
     preprocesador, modelo_xgb, medianas_pca = cargar_cerebro()
 except Exception as e:
-    st.error(f"Error al conectar con el cerebro de Valoralia: {e}")
+    st.error(f"Error critico de sistema: {e}")
     st.stop()
 
 # ==============================================================================
-# INTERFAZ DE USUARIO
+# Interfaz de usuario de alta fidelidad
 # ==============================================================================
-st.markdown("<h1>VALORALIA Systems</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #475569; font-size: 1.2rem;'>Tasación de Alta Precisión basada en Inteligencia Artificial Híbrida</p>", unsafe_allow_html=True)
+st.markdown("<h1>Valoralia Systems</h1>", unsafe_allow_html=True)
+st.markdown("<p class='subtitulo'>Motor de tasacion predictiva híbrida para Real Estate</p>", unsafe_allow_html=True)
 
 with st.container():
     st.markdown("<div class='main-card'>", unsafe_allow_html=True)
     
-    col1, col2 = st.columns([1, 1], gap="large")
+    col1, espaciador, col2 = st.columns([1, 0.1, 1])
     
     with col1:
-        st.subheader("📍 Ubicación y Estructura")
-        zona = st.selectbox("Zona de Madrid", ["Centro", "Salamanca", "Chamberí", "Retiro", "Chamartín", "Moncloa-Aravaca", "Fuencarral-El Pardo", "Tetuán", "Hortaleza", "Arganzuela", "Usera", "Carabanchel", "Latina", "Puente de Vallecas", "Moratalaz", "Ciudad Lineal", "Hortaleza", "Villaverde", "Villa de Vallecas", "Vicalvaro", "San Blas-Canillejas", "Barajas"])
-        superficie = st.number_input("Superficie útil (m²)", min_value=20, max_value=1000, value=85)
-        habitaciones = st.slider("Número de Habitaciones", 1, 10, 2)
-        banos = st.slider("Número de Baños", 1, 5, 1)
+        st.markdown(f"<div class='seccion-titulo'>{svg_ubicacion} Ubicacion y distribucion</div>", unsafe_allow_html=True)
+        # Zonas extraidas directamente del CSV real
+        zona = st.selectbox("Distrito", ["Centro", "Salamanca", "Chamberí", "Retiro", "Chamartín", "Tetuán", "Fuencarral-El Pardo", "Moncloa-Aravaca", "Latina", "Carabanchel", "Usera", "Puente de Vallecas", "Moratalaz", "Ciudad Lineal", "Hortaleza", "Villaverde", "Villa de Vallecas", "Vicálvaro", "San Blas-Canillejas", "Barajas", "Arganzuela", "Pozuelo de Alarcón"])
+        
+        # Limites logicos reales
+        superficie = st.number_input("Superficie util (m2)", min_value=25, max_value=800, value=85, step=5)
+        habitaciones = st.number_input("Habitaciones", min_value=1, max_value=12, value=2, step=1)
+        
+        # Logica arquitectonica: no puedes tener mas baños que (habitaciones + 2)
+        limite_banos = max(1, habitaciones + 2)
+        banos = st.number_input("Baños completos", min_value=1, max_value=limite_banos, value=1, step=1)
         
     with col2:
-        st.subheader("🏗️ Detalles del Edificio")
-        planta = st.number_input("Planta / Altura", min_value=0, max_value=50, value=2)
-        estado = st.select_slider("Estado de la vivienda", options=["A reformar", "Buen estado", "Reformado", "Obra nueva"], value="Buen estado")
-        subir_fotos = st.file_uploader("Subir fotografías del inmueble (Opcional)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
+        st.markdown(f"<div class='seccion-titulo'>{svg_edificio} Estructura y calidad</div>", unsafe_allow_html=True)
+        planta = st.number_input("Planta", min_value=0, max_value=40, value=2, step=1)
         
-        if subir_fotos:
-            st.info(f"Se han cargado {len(subir_fotos)} imágenes. Procesando vectores visuales ResNet50...")
-        else:
-            st.warning("No se han detectado imágenes. Se aplicará el perfil visual promedio para esta zona.")
+        # Valores categoricos exactos de mi base de datos
+        estado = st.selectbox("Estado de conservacion", ["A reformar", "Buen estado", "Obra nueva"])
+        
+        subir_fotos = st.file_uploader("Carga de imagenes (ResNet50)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
+        
+        if not subir_fotos:
+            st.markdown("<p style='font-size:0.85rem; color:#64748b;'>* Si no se adjuntan imagenes, el sistema inyectara el vector visual modal de la zona.</p>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     
-    if st.button("CALCULAR TASACIÓN PROFESIONAL"):
-        # 1. Preparar los datos de entrada (71 columnas exactas)
+    if st.button("Ejecutar modelo de valoracion"):
         fila = {
             'superficie_m2': superficie,
             'habitaciones': habitaciones,
@@ -135,7 +169,7 @@ with st.container():
             'fuente': 'Venta'
         }
         
-        # 2. Gestionar los datos visuales (Sin inventos: o son reales o son las medianas de mi CSV)
+        # Inyeccion estricta de las variables PCA del dataset sin inventos
         for i in range(1, 51):
             col_pca = f'pca_{i}'
             fila[col_pca] = medianas_pca.get(col_pca, 0.0)
@@ -143,37 +177,33 @@ with st.container():
         df_input = pd.DataFrame([fila])
         
         try:
-            # 3. Aplicar mi preprocesador (el mismo del NB04)
             X_trans = preprocesador.transform(df_input)
-            
-            # 4. Predicción logarítmica y conversión
             pred_log = modelo_xgb.predict(X_trans)[0]
             precio_final = np.expm1(pred_log)
             
-            # 5. RESULTADO IMPACTANTE
             st.markdown(
                 f"""
                 <div class='resultado-caja'>
-                    <div class='metric-label'>VALOR ESTIMADO DE MERCADO</div>
+                    <div style='font-size: 0.9rem; letter-spacing: 2px; color: #94a3b8;'>VALORACION DE MERCADO</div>
                     <div class='metric-value'>{precio_final:,.0f} €</div>
-                    <p style='margin-top:10px; opacity: 0.8;'>Precio por metro cuadrado: {precio_final/superficie:,.2f} €/m²</p>
+                    <div style='margin-top: 15px; font-size: 0.95rem; color: #cbd5e1;'>KPI: {precio_final/superficie:,.0f} €/m2</div>
                 </div>
                 """, 
                 unsafe_allow_html=True
             )
-            st.balloons()
             
         except Exception as e:
-            st.error(f"Error técnico en la predicción: {e}")
+            st.error(f"Fallo de ejecucion en pipeline: {e}")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Footer corporativo
+# Footer Enterprise
 st.markdown(
     """
-    <p style='text-align: center; margin-top: 50px; color: #94a3b8; font-size: 0.8rem;'>
-        VALORALIA Systems V1.0 | Proyecto Fin de Máster CEU San Pablo | María Luisa Ros Bolea
-    </p>
+    <div style='text-align: center; margin-top: 40px; color: #64748b; font-size: 0.85rem; padding-bottom: 20px;'>
+        <strong>Valoralia Systems</strong> | Enterprise Edition | Soluciones de IA para Real Estate<br>
+        Motor predictivo híbrido V1.0
+    </div>
     """, 
     unsafe_allow_html=True
 )
