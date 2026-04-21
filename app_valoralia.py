@@ -5,6 +5,12 @@ import pandas as pd
 import streamlit as st
 import xgboost as xgb
 
+# PARCHE DE INGENIERÍA: Soluciona el error '__sklearn_tags__' en la nube
+if not hasattr(sklearn.base.BaseEstimator, "__sklearn_tags__"):
+    def __sklearn_tags__(self):
+        return sklearn.utils._tags._DEFAULT_TAGS
+    sklearn.base.BaseEstimator.__sklearn_tags__ = __sklearn_tags__
+    
 # Configuración de la página
 st.set_page_config(page_title="Valoralia Systems", layout="wide")
 
