@@ -1,13 +1,3 @@
-# -*- coding: utf-8 -*-
-# Valoralia Systems. Aplicacion web productiva
-# Autora: Maria Luisa Ros Bolea
-# TFM. Master en Inteligencia Artificial y Big Data. CEU San Pablo
-#
-# IMPORTANTE: esta aplicacion esta acoplada al preprocesador.pkl serializado
-# tras el reentrenamiento del NB05. El preprocesador espera exactamente
-# 70 columnas de entrada con los nombres y categorias aprendidos en fit.
-# Cualquier desviacion genera errores de columnas faltantes o predicciones ciegas.
-
 import os
 import joblib
 import numpy as np
@@ -15,316 +5,154 @@ import pandas as pd
 import streamlit as st
 import xgboost as xgb
 
-# ==============================================================================
-# 1. Configuracion de la pagina y paleta corporativa
-# ==============================================================================
-st.set_page_config(
-    page_title="Valoralia Systems",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+# Configuración de la página
+st.set_page_config(page_title="Valoralia Systems", layout="wide")
 
-# CSS corporativo (sin emojis, sin imagenes externas que puedan fallar offline)
 st.markdown(
     """
     <style>
     .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        background: linear-gradient(rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.95)), 
+                    url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070');
+        background-size: cover;
+        background-attachment: fixed;
     }
-    h1, h2, h3, h4, label, .stMarkdown p, .stMarkdown li {
-        color: #f8fafc !important;
-        font-family: 'Inter', 'Helvetica Neue', sans-serif;
-    }
-    /* Etiquetas de inputs y selects en gris claro */
-    .stSelectbox label, .stNumberInput label, .stFileUploader label {
-        color: #cbd5e1 !important;
-        font-weight: 500;
-    }
-    /* Valor dentro de los inputs en negro para legibilidad sobre fondo blanco */
-    .stSelectbox div[data-baseweb="select"] span,
-    .stNumberInput input,
-    .stFileUploader div {
-        color: #0f172a !important;
-    }
+    h1, h2, h3, label, p { color: #f8fafc !important; font-family: 'Inter', sans-serif; }
     .caja-premium {
-        background: rgba(248, 250, 252, 0.04);
+        background: rgba(255, 255, 255, 0.03);
         backdrop-filter: blur(10px);
-        border: 1px solid rgba(248, 250, 252, 0.08);
+        border: 1px solid rgba(148, 163, 184, 0.2);
         border-radius: 12px;
-        padding: 32px;
-        margin-bottom: 24px;
+        padding: 35px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
-    .titulo-v {
-        border-left: 6px solid #b91c1c;
-        padding-left: 20px;
-        margin-bottom: 16px;
-    }
-    .stButton > button {
-        background: #b91c1c !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 6px !important;
-        font-weight: 700 !important;
-        height: 52px;
-        width: 100%;
-        text-transform: uppercase;
-        font-size: 1rem;
-        letter-spacing: 1px;
-    }
-    .stButton > button:hover {
-        background: #991b1b !important;
-    }
-    .bloque-info {
-        background: rgba(185, 28, 28, 0.1);
-        border-left: 3px solid #b91c1c;
-        padding: 16px 20px;
-        border-radius: 6px;
-        margin-top: 16px;
-    }
-    .resultado-precio {
-        background: #0f172a;
-        border-top: 4px solid #b91c1c;
-        padding: 32px;
-        border-radius: 10px;
-        text-align: center;
-        margin-top: 24px;
+    .titulo-v { border-left: 5px solid #e11d48; padding-left: 15px; margin-bottom: 25px; }
+    .stButton>button {
+        background: #e11d48 !important; color: white !important; border: none !important;
+        height: 50px; width: 100%; font-weight: 700 !important; text-transform: uppercase;
     }
     </style>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
-# ==============================================================================
-# 2. Carga de artefactos serializados
-# ==============================================================================
-@st.cache_resource(show_spinner="Cargando el modelo hibrido Valoralia...")
-def cargar_artefactos():
-    preprocesador = joblib.load("preprocesador.pkl")
-    modelo = xgb.XGBRegressor()
-    modelo.load_model("modelo_xgb.json")
-    medianas_pca = joblib.load("medianas_pca.pkl")
-    return preprocesador, modelo, medianas_pca
+@st.cache_resource
+def cargar_motor():
+    prepro = joblib.load('preprocesador.pkl')
+    model = xgb.XGBRegressor()
+    model.load_model('modelo_xgb.json')
+    meds_pca = joblib.load('medianas_pca.pkl')
+    return prepro, model, meds_pca
 
 try:
-    preprocesador, modelo_xgb, medianas_pca = cargar_artefactos()
-except Exception as err:
-    st.error(f"Fallo al cargar los artefactos: {err}")
+    preprocesador, modelo_xgb, medianas_pca = cargar_motor()
+except Exception as e:
+    st.error(f"Error de sistema: {e}")
     st.stop()
 
-# ==============================================================================
-# 3. Catalogos de categorias validas (EXACTAS del OneHotEncoder del modelo)
-# ==============================================================================
-# Mapeo de etiqueta visible -> valor que el modelo espera.
-# Las claves son las 39 zonas que el modelo conoce, sin tildes y con guiones bajos.
-ZONAS_MODELO = {
-    "Madrid. Centro":                   "Centro",
-    "Madrid. Salamanca":                "Salamanca",
-    "Madrid. Chamberi":                 "Chamberi",
-    "Madrid. Retiro":                   "Retiro",
-    "Madrid. Chamartin":                "Chamartin",
-    "Madrid. Tetuan":                   "Tetuan",
-    "Madrid. Fuencarral":               "Fuencarral",
-    "Madrid. Moncloa":                  "Moncloa",
-    "Madrid. Ciudad Lineal":            "Ciudad_Lineal",
-    "Madrid. Latina":                   "Latina",
-    "Madrid. Carabanchel":              "Carabanchel",
-    "Madrid. Usera":                    "Usera",
-    "Madrid. Villaverde":               "Villaverde",
-    "Madrid. Puente de Vallecas":       "Puente_Vallecas",
-    "Madrid. Villa de Vallecas":        "Villa_Vallecas",
-    "Madrid. Vicalvaro":                "Vicalvaro",
-    "Madrid. San Blas":                 "San_Blas",
-    "Madrid. Moratalaz":                "Moratalaz",
-    "Pozuelo de Alarcon":               "Pozuelo",
-    "Las Rozas":                        "Las_Rozas",
-    "Boadilla del Monte":               "Boadilla",
-    "Majadahonda":                      "Majadahonda",
-    "Tres Cantos":                      "Tres_Cantos",
-    "San Sebastian de los Reyes":       "SS_Reyes",
-    "Alcobendas":                       "Alcobendas",
-    "Colmenar Viejo":                   "Colmenar_Viejo",
-    "Alcala de Henares":                "Alcala_Henares",
-    "Torrejon de Ardoz":                "Torrejon",
-    "Coslada":                          "Coslada",
-    "Rivas-Vaciamadrid":                "Rivas",
-    "Arganda del Rey":                  "Arganda",
-    "Getafe":                           "Getafe",
-    "Leganes":                          "Leganes",
-    "Alcorcon":                         "Alcorcon",
-    "Mostoles":                         "Mostoles",
-    "Fuenlabrada":                      "Fuenlabrada",
-    "Parla":                            "Parla",
-    "Pinto":                            "Pinto",
-    "Villaviciosa de Odon":             "Villaviciosa_Odon",
-}
+st.markdown("<div class='titulo-v'><h1>Valoralia Systems</h1></div>", unsafe_allow_html=True)
 
-# Tipos de inmueble EXACTOS que el modelo conoce (minusculas, singular)
-TIPOS_INMUEBLE = {
-    "Piso":    "piso",
-    "Atico":   "atico",
-    "Duplex":  "duplex",
-    "Estudio": "estudio",
-    "Chalet":  "chalet",
-}
+with st.container():
+    st.markdown("<div class='caja-premium'>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2, gap="large")
+    
+    with col1:
+        st.subheader("Ubicación y dimensiones")
+        zonas_reales = ['Centro', 'Salamanca', 'Chamberi', 'Retiro', 'Chamartin', 'Tetuan', 
+                        'Fuencarral', 'Moncloa', 'Latina', 'Carabanchel', 'Usera', 
+                        'Puente_Vallecas', 'Moratalaz', 'Ciudad_Lineal', 'Hortaleza', 
+                        'Villaverde', 'Villa_Vallecas', 'Vicalvaro', 'San_Blas', 'Barajas', 
+                        'Pozuelo', 'SS_Reyes', 'Alcobendas', 'Majadahonda', 'Las_Rozas']
+        zona = st.selectbox("Zona", zonas_reales)
+        codigo_postal = st.text_input("Código postal", value="28001")
+        superficie = st.number_input("Superficie (m²)", min_value=20, max_value=1000, value=85)
+        habitaciones = st.number_input("Habitaciones", min_value=1, max_value=15, value=2)
+        
+    with col2:
+        st.subheader("Características del inmueble")
+        banos = st.number_input("Baños", min_value=1, max_value=habitaciones+2, value=1)
+        planta = st.number_input("Planta", min_value=-2, max_value=50, value=2)
+        tipo_inmueble = st.selectbox("Tipo de inmueble", ['piso', 'atico', 'duplex', 'estudio', 'chalet'])
+        estado_reforma_texto = st.selectbox("Estado de la reforma", ["A reformar", "Buen estado", "Obra nueva"])
+        
+    st.markdown("---")
+    st.subheader("Amenidades")
+    col_a, col_b, col_c, col_d = st.columns(4)
+    with col_a: ascensor_texto = st.selectbox("Ascensor", ["Sí", "No", "Desconocido"])
+    with col_b: terraza_texto = st.selectbox("Terraza", ["Sí", "No", "Desconocido"])
+    with col_c: garaje_texto = st.selectbox("Garaje", ["Sí", "No", "Desconocido"])
+    with col_d: calefaccion_texto = st.selectbox("Calefacción", ["Sí", "No", "Desconocido"])
 
-# Mapeo ternario para variables booleanas: 1 tiene, 0 no tiene, -1 desconocido
-# Convencion impuesta por el tutor Miguel: nunca imputar 0 cuando falta el dato
-MAPA_TERNARIO = {"Si": 1, "No": 0, "Desconocido": -1}
+    st.markdown("---")
+    st.subheader("Análisis visual")
+    fotos = st.file_uploader("Adjuntar fotografías (solo conteo en versión demo)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
+    num_imagenes = len(fotos) if fotos else 0
+    
+    st.markdown("""
+        <p style='color: #94a3b8; font-size: 0.85rem;'>
+        * Nota de transparencia: Debido a las limitaciones computacionales del despliegue en la nube, 
+        esta versión de la aplicación no ejecuta la red neuronal ResNet50 en tiempo real. Se inyectará el vector 
+        visual promedio (medianas PCA) extraído durante la fase de entrenamiento, ajustando el modelo con la cantidad 
+        de imágenes proporcionadas.
+        </p>
+    """, unsafe_allow_html=True)
 
-# ==============================================================================
-# 4. Interfaz
-# ==============================================================================
-st.markdown(
-    "<div class='titulo-v'><h1>Valoralia Systems</h1>"
-    "<p style='color:#cbd5e1; font-size: 1.05rem;'>Valoracion automatica de inmuebles residenciales en Madrid. "
-    "Modelo hibrido XGBoost con 50 componentes visuales PCA extraidas con ResNet50.</p></div>",
-    unsafe_allow_html=True,
-)
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if st.button("Calcular tasación de mercado"):
+        
+        # Mapeo de diccionarios estricto paso a paso
+        mapeo_ternario = {"Sí": 1, "No": 0, "Desconocido": -1}
+        mapeo_estado = {"A reformar": -1, "Buen estado": 0, "Obra nueva": 1}
+        
+        ascensor = mapeo_ternario[ascensor_texto]
+        terraza = mapeo_ternario[terraza_texto]
+        garaje = mapeo_ternario[garaje_texto]
+        calefaccion = mapeo_ternario[calefaccion_texto]
+        estado_reforma = mapeo_estado[estado_reforma_texto]
 
-# Bloque 1: Ubicacion y superficie
-st.markdown("<div class='caja-premium'>", unsafe_allow_html=True)
-st.subheader("Ubicacion y dimensiones del inmueble")
-col_a, col_b, col_c = st.columns(3)
-with col_a:
-    zona_etiqueta = st.selectbox("Zona geografica", options=list(ZONAS_MODELO.keys()), index=0)
-    codigo_postal = st.number_input("Codigo postal", min_value=28001, max_value=28999, value=28001, step=1)
-with col_b:
-    tipo_etiqueta = st.selectbox("Tipo de inmueble", options=list(TIPOS_INMUEBLE.keys()), index=0)
-    superficie_m2 = st.number_input("Superficie util (m2)", min_value=20, max_value=1000, value=85, step=5)
-with col_c:
-    planta = st.number_input("Planta", min_value=0, max_value=30, value=3, step=1)
-    num_imagenes_manual = st.number_input("Numero de fotos disponibles", min_value=0, max_value=30, value=8, step=1,
-                                          help="Si subes fotos abajo, se sobrescribe con el conteo real.")
+        datos_entrada = {
+            'superficie_m2': superficie,
+            'habitaciones': habitaciones,
+            'banos': banos,
+            'planta': planta,
+            'zona_scraping': zona,
+            'codigo_postal': codigo_postal,
+            'descripcion': 'Inmueble estandar en venta en Madrid.', 
+            'tipo_inmueble': tipo_inmueble,
+            'fuente': 'pisos.com',
+            'estado_reforma': estado_reforma,
+            'ascensor': ascensor,
+            'terraza': terraza,
+            'garaje': garaje,
+            'calefaccion': calefaccion,
+            'num_imagenes': num_imagenes
+        }
+        
+        df_base = pd.DataFrame([datos_entrada])
+        
+        for i in range(1, 51):
+            col_pca = f'pca_{i}'
+            df_base[col_pca] = medianas_pca.get(col_pca, 0.0)
+            
+        try:
+            X_trans = preprocesador.transform(df_base)
+            prediccion_log = modelo_xgb.predict(X_trans)[0]
+            precio_estimado = np.expm1(prediccion_log)
+            
+            st.markdown(
+                f"""
+                <div style='background: #0f172a; border-top: 4px solid #e11d48; padding: 25px; border-radius: 8px; text-align: center; margin-top: 20px;'>
+                    <p style='color: #e11d48; font-weight: 700; letter-spacing: 2px; margin-bottom: 5px;'>VALORACIÓN ESTIMADA</p>
+                    <p style='font-size: 3.5rem; font-weight: 800; color: #ffffff; margin: 0;'>{precio_estimado:,.0f} €</p>
+                    <p style='color: #94a3b8; font-size: 0.9rem;'>Ratio: {precio_estimado/superficie:,.0f} €/m²</p>
+                </div>
+                """, unsafe_allow_html=True
+            )
+            
+        except Exception as err:
+            st.error(f"Fallo en la ejecución matemática: {err}")
+
 st.markdown("</div>", unsafe_allow_html=True)
-
-# Bloque 2: Distribucion y caracteristicas
-st.markdown("<div class='caja-premium'>", unsafe_allow_html=True)
-st.subheader("Distribucion y caracteristicas")
-col_d, col_e, col_f = st.columns(3)
-with col_d:
-    habitaciones = st.number_input("Habitaciones", min_value=0, max_value=10, value=2, step=1)
-    # Banos proporcional: maximo habitaciones + 2 para evitar datos basura
-    banos = st.number_input("Banos", min_value=1, max_value=max(1, habitaciones + 2), value=1, step=1)
-with col_e:
-    ascensor = st.selectbox("Ascensor", options=["Si", "No", "Desconocido"], index=0)
-    terraza = st.selectbox("Terraza", options=["Si", "No", "Desconocido"], index=2)
-with col_f:
-    garaje = st.selectbox("Garaje", options=["Si", "No", "Desconocido"], index=2)
-    calefaccion = st.selectbox("Calefaccion", options=["Si", "No", "Desconocido"], index=0)
-
-estado_opciones = {"Reformado": 1, "Original": 0, "A reformar": 0, "Desconocido": -1}
-estado_etiqueta = st.selectbox("Estado de reforma", options=list(estado_opciones.keys()), index=3)
-estado_reforma = estado_opciones[estado_etiqueta]
-st.markdown("</div>", unsafe_allow_html=True)
-
-# Bloque 3: Aportacion visual (transparencia academica)
-st.markdown("<div class='caja-premium'>", unsafe_allow_html=True)
-st.subheader("Aportacion visual al modelo hibrido")
-fotos_subidas = st.file_uploader(
-    "Sube las fotografias del interior (opcional)",
-    type=["jpg", "jpeg", "png"],
-    accept_multiple_files=True,
-    help="El TFM demuestra que las componentes PCA visuales aportan el 27,2% de la importancia predictiva (analisis SHAP).",
-)
-
-if fotos_subidas:
-    st.markdown(
-        f"""<div class='bloque-info'>
-            <p style='color: #f8fafc; font-weight: 600; margin: 0; letter-spacing: 1px;'>FOTOGRAFIAS RECIBIDAS: {len(fotos_subidas)}</p>
-            <p style='color: #cbd5e1; font-size: 0.9rem; margin-top: 6px; margin-bottom: 0;'>
-            Esta version publica ejecuta el modelo con las medianas PCA del mercado como fallback para mantener el peso del contenedor bajo 200 MB. 
-            El procesamiento visual completo con ResNet50 y PCA (entrenado sobre mas de 100.000 fotografias en el NB03) esta disponible en el repositorio academico del TFM.
-            </p>
-        </div>""",
-        unsafe_allow_html=True,
-    )
-else:
-    st.markdown(
-        """<p style='color: #94a3b8; font-size: 0.9rem; margin-top: 12px;'>
-        Sin fotografias: el modelo utiliza las medianas PCA del conjunto de entrenamiento como fallback.
-        </p>""",
-        unsafe_allow_html=True,
-    )
-st.markdown("</div>", unsafe_allow_html=True)
-
-# ==============================================================================
-# 5. Prediccion
-# ==============================================================================
-if st.button("Generar valoracion de mercado"):
-    # Decodifico las etiquetas visibles a los valores exactos del modelo
-    zona_valor = ZONAS_MODELO[zona_etiqueta]
-    tipo_valor = TIPOS_INMUEBLE[tipo_etiqueta]
-
-    # Construyo las 70 columnas que el preprocesador espera
-    # Columnas categoricas con valores no relevantes para la prediccion (el OHE
-    # con handle_unknown='ignore' los mapeara a cero sin romper el pipeline)
-    fila = {
-        # Metadatos de scraping (el modelo los aprendio pero no son informativos)
-        "url": "https://www.pisos.com/valoracion-web/",
-        "fecha_scraping": "2026-04-21 00:00:00",
-        "titulo": f"Inmueble en {zona_etiqueta}",
-        "url_imagen_principal": "-",
-        "urls_imagenes": "-",
-        "descripcion": "Valoracion solicitada via web Valoralia.",
-        "fuente": "pisos.com",  # unico valor que el modelo conoce
-        # Variables estructurales (las que de verdad pesan en la prediccion)
-        "zona_scraping": zona_valor,
-        "tipo_inmueble": tipo_valor,
-        "superficie_m2": superficie_m2,
-        "habitaciones": habitaciones,
-        "banos": banos,
-        "planta": planta,
-        "num_imagenes": len(fotos_subidas) if fotos_subidas else num_imagenes_manual,
-        "codigo_postal": codigo_postal,
-        # Variables booleanas con codificacion ternaria (linea roja de Miguel)
-        "ascensor": MAPA_TERNARIO[ascensor],
-        "terraza": MAPA_TERNARIO[terraza],
-        "garaje": MAPA_TERNARIO[garaje],
-        "calefaccion": MAPA_TERNARIO[calefaccion],
-        "estado_reforma": estado_reforma,
-    }
-    # Las 50 componentes PCA visuales: fallback con medianas del mercado
-    for i in range(1, 51):
-        clave = f"pca_{i}"
-        fila[clave] = float(medianas_pca.get(clave, 0.0))
-
-    # Construccion del DataFrame respetando el orden esperado por el preprocesador
-    columnas_esperadas = list(preprocesador.feature_names_in_)
-    X_scoring = pd.DataFrame([fila])[columnas_esperadas]
-
-    try:
-        X_trans = preprocesador.transform(X_scoring)
-        prediccion_log = modelo_xgb.predict(X_trans)[0]
-        precio_estimado = float(np.expm1(prediccion_log))
-
-        precio_m2 = precio_estimado / superficie_m2
-        precio_formateado = "{:,.0f}".format(precio_estimado).replace(",", ".")
-        m2_formateado = "{:,.0f}".format(precio_m2).replace(",", ".")
-
-        st.markdown(
-            f"""<div class='resultado-precio'>
-                <p style='color: #b91c1c; font-weight: 700; letter-spacing: 2px; margin-bottom: 8px; font-size: 0.9rem;'>
-                VALORACION ESTIMADA VALORALIA
-                </p>
-                <p style='font-size: 3.2rem; font-weight: 800; color: #f8fafc; margin: 0;'>
-                {precio_formateado} EUR
-                </p>
-                <p style='color: #cbd5e1; font-size: 1rem; margin-top: 8px;'>
-                Equivalente a {m2_formateado} EUR/m2 en {zona_etiqueta}
-                </p>
-                <p style='color: #94a3b8; font-size: 0.8rem; margin-top: 16px; margin-bottom: 0;'>
-                Margen de error tipico del modelo. MAE 210.799 EUR, MAPE 20,09%, R2 logaritmico 0,9146
-                </p>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-
-    except Exception as err:
-        st.error(f"Fallo en el pipeline de prediccion: {err}")
-
-# Pie
-st.markdown(
-    "<p style='text-align: center; color: #64748b; font-size: 0.8rem; padding: 24px 0 12px 0;'>"
-    "Valoralia Systems. TFM Maria Luisa Ros Bolea. CEU San Pablo. 2026</p>",
-    unsafe_allow_html=True,
-)
+st.markdown("<p style='text-align: center; color: #475569; font-size: 0.8rem; padding: 20px;'>© 2026 Valoralia Systems | Proyecto Fin de Máster</p>", unsafe_allow_html=True)
