@@ -1,4 +1,12 @@
+import subprocess
+import sys
 
+# Truco para asegurar que joblib se instala en Streamlit Cloud
+try:
+    import joblib
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "joblib==1.3.2"])
+    import joblib
 # -*- coding: utf-8 -*-
 # Valoralia Systems. Aplicacion web productiva
 # Autora: Maria Luisa Ros Bolea
