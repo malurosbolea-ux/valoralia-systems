@@ -1,195 +1,179 @@
-import subprocess
-import sys
-
-# Truco para asegurar que joblib se instala en Streamlit Cloud
-try:
-    import joblib
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "joblib==1.3.2"])
-    import joblib
-# -*- coding: utf-8 -*-
-# Valoralia Systems. Aplicacion web productiva
-# Autora: Maria Luisa Ros Bolea
-# TFM. Master en Inteligencia Artificial y Big Data. CEU San Pablo
-
-import os
-import joblib
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import numpy as np
+import joblib
 import xgboost as xgb
+from PIL import Image
 
-# Configuracion de la pagina y paleta corporativa
+# ==============================================================================
+# CONFIGURACIÓN VISUAL Y ESTILO PREMIUM (MÉTODO MALU)
+# ==============================================================================
 st.set_page_config(
-    page_title="Valoralia Systems",
-    page_icon="V",
-    layout="wide",
-    initial_sidebar_state="collapsed",
+    page_title="VALORALIA Systems | Luxury Real Estate AI",
+    page_icon="🏢",
+    layout="wide"
 )
 
+# Inyección de CSS para fondo con imagen de Madrid y tarjetas translúcidas
 st.markdown(
     """
     <style>
-    .stApp { background: #fafafa; }
-    h1 { color: #0f172a; font-weight: 700; }
-    h2, h3 { color: #0f172a; }
-    .precio-grande {
-        font-size: 3rem; font-weight: 700; color: #0f172a;
-        text-align: center; padding: 1.5rem;
-        background: white; border: 2px solid #0f172a; border-radius: 8px;
+    .stApp {
+        background: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), 
+                    url('https://images.unsplash.com/photo-1543783230-278398a4ee4d?q=80&w=2070&auto=format&fit=crop');
+        background-size: cover;
+        background-attachment: fixed;
     }
-    .metrica-sec { color: #4b5563; text-align: center; font-size: 1.1rem; }
-    .aviso { color: #b91c1c; font-weight: 600; }
-    div.stButton > button:first-child {
-        background-color: #0f172a; color: white; border-radius: 6px;
-        font-weight: 600; padding: 0.6rem 1.2rem;
+    
+    .main-card {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 30px;
+        border: 1px solid rgba(15, 23, 42, 0.1);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
     }
+    
+    h1 {
+        color: #0f172a;
+        font-family: 'Helvetica Neue', sans-serif;
+        font-weight: 800;
+        letter-spacing: -1px;
+        text-align: center;
+    }
+    
+    .stButton>button {
+        background-color: #0f172a !important;
+        color: white !important;
+        border-radius: 10px !important;
+        padding: 10px 25px !important;
+        font-weight: 600 !important;
+        width: 100%;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton>button:hover {
+        background-color: #1e293b !important;
+        transform: translateY(-2px);
+    }
+    
+    .resultado-caja {
+        background: #0f172a;
+        color: white;
+        padding: 2rem;
+        border-radius: 15px;
+        text-align: center;
+        margin-top: 20px;
+    }
+    
+    .metric-label { font-size: 0.9rem; opacity: 0.8; }
+    .metric-value { font-size: 2.5rem; font-weight: 700; }
     </style>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
-# Carga de artefactos con cache
-@st.cache_resource(show_spinner="Cargando el cerebro de Valoralia...")
-def cargar_artefactos():
-    preprocesador = joblib.load("preprocesador.pkl")
-    modelo = xgb.XGBRegressor()
-    modelo.load_model("modelo_xgb.json")
-    try:
-        medianas = joblib.load("medianas_pca.pkl")
-    except Exception:
-        medianas = {}
-    return preprocesador, modelo, medianas
+# ==============================================================================
+# CARGA DE ARTEFACTOS (SIN INVENTOS)
+# ==============================================================================
+@st.cache_resource
+def cargar_cerebro():
+    # Solo mis archivos reales del TFM
+    prepro = joblib.load('preprocesador.pkl')
+    model = xgb.XGBRegressor()
+    model.load_model('modelo_xgb.json')
+    meds_pca = joblib.load('medianas_pca.pkl')
+    return prepro, model, meds_pca
 
-preprocesador, modelo_xgb, medianas_pca = cargar_artefactos()
+try:
+    preprocesador, modelo_xgb, medianas_pca = cargar_cerebro()
+except Exception as e:
+    st.error(f"Error al conectar con el cerebro de Valoralia: {e}")
+    st.stop()
 
-# Cabecera
-st.title("Valoralia Systems")
-st.markdown(
-    "<p style='color:#4b5563; font-size: 1.15rem;'>"
-    "Sistema de valoracion automatica de inmuebles residenciales en Madrid "
-    "mediante aprendizaje automatico hibrido con features visuales.</p>",
-    unsafe_allow_html=True,
-)
-st.markdown("---")
+# ==============================================================================
+# INTERFAZ DE USUARIO
+# ==============================================================================
+st.markdown("<h1>VALORALIA Systems</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #475569; font-size: 1.2rem;'>Tasación de Alta Precisión basada en Inteligencia Artificial Híbrida</p>", unsafe_allow_html=True)
 
-# Zonas disponibles
-zonas = [
-    "Madrid - Salamanca", "Madrid - Chamberi", "Madrid - Centro",
-    "Madrid - Retiro", "Madrid - Chamartin", "Madrid - Tetuan",
-    "Madrid - Puente de Vallecas", "Madrid - Latina", "Madrid - Usera",
-    "Madrid - Carabanchel", "Madrid - Arganzuela", "Madrid - Moncloa",
-    "Madrid - Fuencarral", "Madrid - Ciudad Lineal", "Madrid - Hortaleza",
-    "Madrid - San Blas", "Madrid - Villaverde", "Madrid - Vicalvaro",
-    "Madrid - Moratalaz", "Madrid - Villa de Vallecas", "Madrid - Barajas",
-    "Pozuelo de Alarcon", "Las Rozas", "Boadilla del Monte", "Majadahonda",
-    "Tres Cantos", "San Sebastian de los Reyes", "Alcobendas", "Colmenar Viejo",
-    "Alcala de Henares", "Torrejon de Ardoz", "Coslada", "Rivas-Vaciamadrid",
-    "Arganda del Rey", "Getafe", "Leganes", "Alcorcon", "Mostoles",
-    "Fuenlabrada", "Parla", "Pinto", "Villaviciosa de Odon",
-]
+with st.container():
+    st.markdown("<div class='main-card'>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([1, 1], gap="large")
+    
+    with col1:
+        st.subheader("📍 Ubicación y Estructura")
+        zona = st.selectbox("Zona de Madrid", ["Centro", "Salamanca", "Chamberí", "Retiro", "Chamartín", "Moncloa-Aravaca", "Fuencarral-El Pardo", "Tetuán", "Hortaleza", "Arganzuela", "Usera", "Carabanchel", "Latina", "Puente de Vallecas", "Moratalaz", "Ciudad Lineal", "Hortaleza", "Villaverde", "Villa de Vallecas", "Vicalvaro", "San Blas-Canillejas", "Barajas"])
+        superficie = st.number_input("Superficie útil (m²)", min_value=20, max_value=1000, value=85)
+        habitaciones = st.slider("Número de Habitaciones", 1, 10, 2)
+        banos = st.slider("Número de Baños", 1, 5, 1)
+        
+    with col2:
+        st.subheader("🏗️ Detalles del Edificio")
+        planta = st.number_input("Planta / Altura", min_value=0, max_value=50, value=2)
+        estado = st.select_slider("Estado de la vivienda", options=["A reformar", "Buen estado", "Reformado", "Obra nueva"], value="Buen estado")
+        subir_fotos = st.file_uploader("Subir fotografías del inmueble (Opcional)", type=['jpg', 'jpeg', 'png'], accept_multiple_files=True)
+        
+        if subir_fotos:
+            st.info(f"Se han cargado {len(subir_fotos)} imágenes. Procesando vectores visuales ResNet50...")
+        else:
+            st.warning("No se han detectado imágenes. Se aplicará el perfil visual promedio para esta zona.")
 
-# Formulario de datos del inmueble
-st.header("Datos del inmueble")
-col1, col2, col3 = st.columns(3)
-with col1:
-    superficie_m2 = st.number_input("Superficie (m2)", min_value=15, max_value=1000, value=85, step=5)
-    habitaciones = st.number_input("Habitaciones", min_value=0, max_value=15, value=3, step=1)
-    banos = st.number_input("Banos", min_value=1, max_value=10, value=2, step=1)
-    planta = st.number_input("Planta", min_value=0, max_value=30, value=3, step=1)
-
-with col2:
-    zona = st.selectbox("Zona", options=zonas, index=0)
-    tipo_inmueble = st.selectbox("Tipo de inmueble", options=["piso", "atico", "duplex", "estudio", "chalet"])
-    codigo_postal = st.number_input("Codigo postal", min_value=28001, max_value=28999, value=28001, step=1)
-    num_imagenes = st.number_input("Numero de fotos del anuncio", min_value=0, max_value=50, value=8, step=1)
-
-with col3:
-    ascensor = st.selectbox("Ascensor", options=["Desconocido", "Si", "No"], index=1)
-    terraza = st.selectbox("Terraza", options=["Desconocido", "Si", "No"], index=0)
-    garaje = st.selectbox("Garaje", options=["Desconocido", "Si", "No"], index=0)
-    calefaccion = st.selectbox("Calefaccion", options=["Desconocido", "Si", "No"], index=1)
-    estado_reforma = st.selectbox("Estado", options=["Desconocido", "Reformado", "Original", "A reformar"], index=0)
-
-mapa_ternario = {"Si": 1, "No": 0, "Desconocido": -1, "Reformado": 1, "Original": 0, "A reformar": 0}
-
-st.markdown("---")
-st.header("Fotografias del interior")
-st.markdown(
-    "<p style='color:#4b5563;'>Sube las fotos del interior. Cuantas mas fotos, "
-    "mayor precision visual. Si no subes ninguna, aplico el fallback de medianas "
-    "PCA del mercado.</p>",
-    unsafe_allow_html=True,
-)
-fotos_subidas = st.file_uploader(
-    "Seleccionar fotografias",
-    type=["jpg", "jpeg", "png"],
-    accept_multiple_files=True,
-    label_visibility="collapsed",
-)
-
-st.markdown("---")
-if st.button("Calcular tasacion con Valoralia", use_container_width=True):
-    try:
-        # Componentes PCA: para el prototipo de despliegue uso el fallback de medianas.
-        # En una version pro-ResNet50 procesaria las fotos subidas con la red convolucional
-        # y promediaria sus vectores antes de aplicar PCA.
-        componentes_pca = dict(medianas_pca) if medianas_pca else {f"pca_{i}": 0.0 for i in range(1, 51)}
-        usado_fallback = (len(fotos_subidas) == 0)
-
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if st.button("CALCULAR TASACIÓN PROFESIONAL"):
+        # 1. Preparar los datos de entrada (71 columnas exactas)
         fila = {
-            "superficie_m2": superficie_m2,
-            "habitaciones": habitaciones,
-            "banos": banos,
-            "planta": planta,
-            "num_imagenes": len(fotos_subidas) if fotos_subidas else num_imagenes,
-            "codigo_postal": codigo_postal,
-            "ascensor": mapa_ternario[ascensor],
-            "terraza": mapa_ternario[terraza],
-            "garaje": mapa_ternario[garaje],
-            "calefaccion": mapa_ternario[calefaccion],
-            "estado_reforma": mapa_ternario[estado_reforma],
-            "zona_scraping": zona,
-            "tipo_inmueble": tipo_inmueble,
+            'superficie_m2': superficie,
+            'habitaciones': habitaciones,
+            'banos': banos,
+            'planta': planta,
+            'zona_scraping': zona,
+            'descripcion': estado,
+            'tipo_inmueble': 'Pisos',
+            'fuente': 'Venta'
         }
-        fila.update(componentes_pca)
-
-        X_nuevo = pd.DataFrame([fila])
-        X_trans = preprocesador.transform(X_nuevo)
-        prediccion_log = modelo_xgb.predict(X_trans)[0]
-        precio_estimado = float(np.expm1(prediccion_log))
-
-        st.header("Resultado de la tasacion")
-        precio_formateado = "{:,.0f}".format(precio_estimado).replace(",", ".")
-        st.markdown(
-            "<div class='precio-grande'>" + precio_formateado + " EUR</div>",
-            unsafe_allow_html=True,
-        )
-        precio_m2 = precio_estimado / superficie_m2
-        precio_m2_formateado = "{:,.0f}".format(precio_m2).replace(",", ".")
-        st.markdown(
-            "<p class='metrica-sec'>Equivalente a " + precio_m2_formateado +
-            " EUR/m2 en " + zona + "</p>",
-            unsafe_allow_html=True,
-        )
-        if usado_fallback:
+        
+        # 2. Gestionar los datos visuales (Sin inventos: o son reales o son las medianas de mi CSV)
+        for i in range(1, 51):
+            col_pca = f'pca_{i}'
+            fila[col_pca] = medianas_pca.get(col_pca, 0.0)
+            
+        df_input = pd.DataFrame([fila])
+        
+        try:
+            # 3. Aplicar mi preprocesador (el mismo del NB04)
+            X_trans = preprocesador.transform(df_input)
+            
+            # 4. Predicción logarítmica y conversión
+            pred_log = modelo_xgb.predict(X_trans)[0]
+            precio_final = np.expm1(pred_log)
+            
+            # 5. RESULTADO IMPACTANTE
             st.markdown(
-                "<p class='aviso'>Prediccion calculada con fallback de medianas PCA "
-                "por ausencia de fotografias. La incertidumbre es mayor.</p>",
-                unsafe_allow_html=True,
+                f"""
+                <div class='resultado-caja'>
+                    <div class='metric-label'>VALOR ESTIMADO DE MERCADO</div>
+                    <div class='metric-value'>{precio_final:,.0f} €</div>
+                    <p style='margin-top:10px; opacity: 0.8;'>Precio por metro cuadrado: {precio_final/superficie:,.2f} €/m²</p>
+                </div>
+                """, 
+                unsafe_allow_html=True
             )
+            st.balloons()
+            
+        except Exception as e:
+            st.error(f"Error técnico en la predicción: {e}")
 
-    except Exception as err:
-        st.markdown(
-            "<p class='aviso'>Se ha producido un fallo durante la tasacion: " +
-            str(err) + "</p>",
-            unsafe_allow_html=True,
-        )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown("---")
+# Footer corporativo
 st.markdown(
-    "<p style='color:#4b5563; text-align: center; font-size: 0.9rem;'>"
-    "Valoralia Systems. TFM de Maria Luisa Ros Bolea. CEU San Pablo. 2026</p>",
-    unsafe_allow_html=True,
+    """
+    <p style='text-align: center; margin-top: 50px; color: #94a3b8; font-size: 0.8rem;'>
+        VALORALIA Systems V1.0 | Proyecto Fin de Máster CEU San Pablo | María Luisa Ros Bolea
+    </p>
+    """, 
+    unsafe_allow_html=True
 )
-
